@@ -62,6 +62,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	t.Execute(w, getDataByIP(ip))
+	client.Incr("visitors")
 }
 
 func getDataByIP(ip string) map[string]any {
@@ -218,6 +219,7 @@ func main() {
 	if err != nil {
 		logger.Error(err)
 	}
+	client.Set("visitors", 0, 0)
 
 	getOrUpdateData()
 	gocron.Every(1).Day().At("01:00").Do(getOrUpdateData)
