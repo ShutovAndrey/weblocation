@@ -270,12 +270,14 @@ func GetFromDB(name string) (*[]IpAd, *map[string]string) {
 			logger.Error(err)
 		}
 		return &ipAdresses, &locations
+	} else if name == "Currency" {
+		currencies, err := readCsvFile(fileNames["Currency"], 1, 3)
+		if err != nil {
+			logger.Error(err)
+		}
+		return nil, &currencies
+	} else {
+		return nil, nil
 	}
 
-	currencies, err := readCsvFile(fileNames["Currency"], 1, 3)
-	if err != nil {
-		logger.Error(err)
-	}
-
-	return nil, &currencies
 }

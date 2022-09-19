@@ -25,7 +25,6 @@ func init() {
 }
 
 type Weather struct {
-	// CityName string `json:"name"`
 	Main struct {
 		Temp      float64 `json:"temp"`
 		FeelsLike float64 `json:"feels_like"`
@@ -39,14 +38,17 @@ var client *redis.Client
 
 var tpl *template.Template
 
-//go:embed assets/*
-var content embed.FS
+//go:embed templates
+var index embed.FS
+
+//go:embed static
+var styles embed.FS
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
+	t, err := template.ParseFS(index, "templates/index.html")
+	if err != nil {
+		logger.Error(err)
 	}
 
 	ip := strings.Split(r.RemoteAddr, ":")[0]
@@ -59,15 +61,10 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tpl, err := template.ParseFS(content, "assets/index.html")
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	tpl.Execute(w, getDataByIP(ip))
+	t.Execute(w, getDataByIP(ip))
 }
 
-func getDataByIP(ip string) map[string]string {
+func getDataByIP(ip string) map[string]any {
 	ipParsed := net.ParseIP(ip)
 	binaryIP := binary.BigEndian.Uint32(ipParsed[12:16])
 
@@ -103,10 +100,9 @@ func getDataByIP(ip string) map[string]string {
 
 	weather := getWeather(cityCode)
 
-	return map[string]string{
-		"country":      country,
+	return map[string]any{
 		"city":         cityName,
-		"clouds":       fmt.Sprint(weather.Clouds.All),
+		"clouds":       weather.Clouds.All,
 		"temp":         fmt.Sprint(weather.Main.Temp),
 		"temp_feels":   fmt.Sprint(weather.Main.FeelsLike),
 		"currencyRate": getExRates(currency),
@@ -153,7 +149,7 @@ func getExRates(currency string) string {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "" // логировать варнинг?
+		return "" // TODO make warning logs
 	}
 
 	return string(body)
@@ -213,7 +209,7 @@ func main() {
 	defer logger.Close()
 
 	client = redis.NewClient(&redis.Options{
-		Addr:     "127.0.0.1:6379",
+		Addr:     "localhost:6379",
 		Password: "",
 		DB:       5,
 	})
@@ -227,11 +223,16 @@ func main() {
 	gocron.Every(1).Day().At("01:00").Do(getOrUpdateData)
 	<-gocron.Start()
 
-	mux := http.NewServeMux()
+	var stylesFS = http.FS(styles)
+	fs := http.FileServer(stylesFS)
 
-	mux.HandleFunc("/", indexHandler)
+	// Serve static files
+	http.Handle("/static/", fs)
 
-	if err := http.ListenAndServe(":8080", mux); err != nil {
+	http.HandleFunc("/", indexHandler)
+
+	err = http.ListenAndServe(":8082", nil)
+	if err != nil {
 		logger.Error(err)
 	}
 }
