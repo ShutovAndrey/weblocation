@@ -223,7 +223,6 @@ func main() {
 	client.Set("visitors", 0, 0)
 
 	getOrUpdateData()
-	fmt.Println("updated")
 
 	c := cron.New()
 	c.AddFunc("@daily", getOrUpdateData)

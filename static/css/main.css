@@ -1,3 +1,8 @@
+@media (max-width: 700px) {
+  .telegram {
+    padding: 5px 10px!important;
+  }
+}
 
 body{
   background-color: #666;
@@ -44,14 +49,17 @@ a:hover{
   display: flex;
   align-items: center;
   margin: auto;
+  height: 200px;
 }
 .telegram{
-  height: 40px;
-  padding: 0 30px;
+  padding: 10px 30px;
   border: 1px solid black;
   border-radius: 5px;
   cursor: pointer;
   margin-right: 250px;
+}
+.gopher{
+  width: 50%; 
 }
 .telegram:hover { background: orange; }
 .typewriter {
