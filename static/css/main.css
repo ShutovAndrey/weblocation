@@ -5,7 +5,7 @@ body{
   text-align: center;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 98vh;
   font-family: 'Open Sans', sans-serif;
   border: 2px solid white;
   border-radius: 10px;
@@ -43,6 +43,7 @@ a:hover{
   flex-shrink: 0;
   display: flex;
   align-items: center;
+  margin: auto;
 }
 .telegram{
   height: 40px;
@@ -50,6 +51,7 @@ a:hover{
   border: 1px solid black;
   border-radius: 5px;
   cursor: pointer;
+  margin-right: 250px;
 }
 .telegram:hover { background: orange; }
 .typewriter {

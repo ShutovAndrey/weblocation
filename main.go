@@ -53,20 +53,21 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 	ip := strings.Split(r.RemoteAddr, ":")[0]
 
-	blackList := [4]any{nil, "localhost", "127.0.0.1", "0.0.0.0"}
-
-	for _, n := range blackList {
-		if ip == n {
-			ip = "5.149.159.38"
-		}
-	}
-
 	t.Execute(w, getDataByIP(ip))
 	client.Incr("visitors")
 }
 
 func getDataByIP(ip string) map[string]any {
+	blackList := [3]string{"localhost", "127.0.0.1", "0.0.0.0"}
+
 	ipParsed := net.ParseIP(ip)
+
+	for _, n := range blackList {
+		if ipParsed == nil || ip == n {
+			ipParsed = net.ParseIP("5.149.159.38")
+		}
+	}
+
 	binaryIP := binary.BigEndian.Uint32(ipParsed[12:16])
 
 	op := redis.ZRangeBy{
@@ -90,7 +91,7 @@ func getDataByIP(ip string) map[string]any {
 	cityCode := strings.Split(cities[0], "_")[0]
 
 	cityName, err := client.HGet("cities", cityCode).Result()
-	if err != nil {
+	if err != nil || cityName == "" {
 		cityName = "Saint-Petersburg"
 	}
 
