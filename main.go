@@ -8,9 +8,9 @@ import (
 	"github.com/ShutovAndrey/weblocation/pkg/logger"
 	"github.com/ShutovAndrey/weblocation/pkg/provider"
 	"github.com/go-redis/redis"
-	"github.com/jasonlvhit/gocron"
 	"github.com/joho/godotenv"
 	"github.com/pkg/errors"
+	"github.com/robfig/cron/v3"
 	"html/template"
 	"io"
 	"net"
@@ -223,8 +223,11 @@ func main() {
 	client.Set("visitors", 0, 0)
 
 	getOrUpdateData()
-	gocron.Every(1).Day().At("01:00").Do(getOrUpdateData)
-	<-gocron.Start()
+	fmt.Println("updated")
+
+	c := cron.New()
+	c.AddFunc("@daily", getOrUpdateData)
+	c.Start()
 
 	var stylesFS = http.FS(styles)
 	fs := http.FileServer(stylesFS)
@@ -234,8 +237,11 @@ func main() {
 
 	http.HandleFunc("/", indexHandler)
 
-	err = http.ListenAndServe(":8082", nil)
+	fmt.Println("Listening on :80")
+
+	err = http.ListenAndServe("", nil)
 	if err != nil {
+		c.Stop()
 		logger.Error(err)
 	}
 }
