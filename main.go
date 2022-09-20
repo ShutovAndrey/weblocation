@@ -113,7 +113,10 @@ func getDataByIP(ip string) map[string]any {
 }
 
 func getWeather(cityId string) Weather {
-	key, _ := os.LookupEnv("WEATHER_KEY")
+	key, ok := os.LookupEnv("WEATHER_KEY")
+	if !ok {
+		key = "91096da3832d63747cd8c98c01c16e8f"
+	}
 
 	uri := fmt.Sprintf(
 		"https://api.openweathermap.org/data/2.5/weather?id=%s&units=metric&appid=%s",
@@ -222,6 +225,7 @@ func main() {
 	}
 	client.Set("visitors", 0, 0)
 
+	fmt.Println("Collecting data. Please wait..")
 	getOrUpdateData()
 
 	c := cron.New()
