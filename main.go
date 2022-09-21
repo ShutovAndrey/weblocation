@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 )
 
 func init() {
@@ -26,11 +27,11 @@ func init() {
 
 type Weather struct {
 	Main struct {
-		Temp      float64 `json:"temp"`
-		FeelsLike float64 `json:"feels_like"`
+		Temp      float32 `json:"temp"`
+		FeelsLike float32 `json:"feels_like"`
 	} `json:"main"`
 	Clouds struct {
-		All int `json:"all"`
+		All uint8 `json:"all"`
 	} `json:"clouds"`
 }
 
@@ -77,37 +78,49 @@ func getDataByIP(ip string) map[string]any {
 		Offset: 0,
 		Count:  1,
 	}
+	var weather Weather
+	var cityName, currency string
 
-	countries, err := client.ZRevRangeByScore("ip_countries", op).Result()
-	if err != nil {
-		countries = append(countries, "Russia")
-	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
 
-	country := strings.Split(countries[0], "_")[0]
+		countries, err := client.ZRevRangeByScore("ip_countries", op).Result()
+		if err != nil {
+			countries = append(countries, "Russia")
+		}
+		country := strings.Split(countries[0], "_")[0]
 
-	cities, err := client.ZRevRangeByScore("ip_cities", op).Result()
-	if err != nil {
-		cities = append(cities, "498817")
-	}
-	cityCode := strings.Split(cities[0], "_")[0]
+		currency, err = client.HGet("currency", country).Result()
+		if err != nil {
+			currency = "RUB"
+		}
 
-	cityName, err := client.HGet("cities", cityCode).Result()
-	if err != nil || cityName == "" {
-		cityName = "Saint-Petersburg"
-	}
+	}()
+	go func() {
+		defer wg.Done()
 
-	currency, err := client.HGet("currency", country).Result()
-	if err != nil {
-		currency = "RUB"
-	}
+		cities, err := client.ZRevRangeByScore("ip_cities", op).Result()
+		if err != nil {
+			cities = append(cities, "498817")
+		}
+		cityCode := strings.Split(cities[0], "_")[0]
 
-	weather := getWeather(cityCode)
+		cityName, err = client.HGet("cities", cityCode).Result()
+		if err != nil || cityName == "" {
+			cityName = "Saint-Petersburg"
+		}
+		weather = getWeather(cityCode)
+	}()
+
+	wg.Wait()
 
 	return map[string]any{
 		"city":         cityName,
 		"clouds":       weather.Clouds.All,
-		"temp":         fmt.Sprint(weather.Main.Temp),
-		"temp_feels":   fmt.Sprint(weather.Main.FeelsLike),
+		"temp":         weather.Main.Temp,
+		"temp_feels":   weather.Main.FeelsLike,
 		"currencyRate": getExRates(currency),
 		"currency":     currency,
 	}
@@ -165,51 +178,59 @@ func getExRates(currency string) string {
 	return string(body)
 }
 
+//takes data from provider and set it to redis
 func getOrUpdateData() {
-	// TODO make async
-	ipCountries, countries := provider.GetFromDB("Country")
-	ipCities, cities := provider.GetFromDB("City")
-	_, currencies := provider.GetFromDB("Currency")
-
-	client.Del("ip_countries")
-	for i, ip := range *ipCountries {
-		code, ok := countries[ip.Code]
-		if !ok {
-			continue
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		ipCountries, countries := provider.GetFromDB("Country")
+		client.Del("ip_countries")
+		for i, ip := range *ipCountries {
+			code, ok := countries[ip.Code]
+			if !ok {
+				continue
+			}
+			//unique names
+			name := fmt.Sprintf("%s_%d", code, i)
+			member := redis.Z{Score: float64(ip.Ip), Member: name}
+			client.ZAdd("ip_countries", member)
 		}
-		//unique names
-		name := fmt.Sprintf("%s_%d", code, i)
-		member := redis.Z{Score: float64(ip.Ip), Member: name}
-		client.ZAdd("ip_countries", member)
-	}
+		*ipCountries = nil
+		countries = nil
+	}()
 
-	client.Del("ip_cities")
-	client.Del("cities")
-	for i, ip := range *ipCities {
-		cityName, ok := cities[ip.Code]
-		if !ok {
-			continue
+	go func() {
+		defer wg.Done()
+		ipCities, cities := provider.GetFromDB("City")
+		client.Del("ip_cities")
+		client.Del("cities")
+		for i, ip := range *ipCities {
+			cityName, ok := cities[ip.Code]
+			if !ok {
+				continue
+			}
+			client.HSet("cities", ip.Code, cityName)
+			//unique names
+			name := fmt.Sprintf("%s_%d", ip.Code, i)
+			member := redis.Z{Score: float64(ip.Ip), Member: name}
+			client.ZAdd("ip_cities", member)
 		}
-		client.HSet("cities", ip.Code, cityName)
-		//unique names
-		name := fmt.Sprintf("%s_%d", ip.Code, i)
-		member := redis.Z{Score: float64(ip.Ip), Member: name}
-		client.ZAdd("ip_cities", member)
-	}
+		*ipCities = nil
+		cities = nil
+	}()
 
-	client.Del("currency")
-	for k, v := range currencies {
-		client.HSet("currency", k, v)
-	}
-
+	go func() {
+		defer wg.Done()
+		_, currencies := provider.GetFromDB("Currency")
+		client.Del("currency")
+		for k, v := range currencies {
+			client.HSet("currency", k, v)
+		}
+		currencies = nil
+	}()
+	wg.Wait()
 	logger.Info("Redis databases updated")
-
-	//clearing
-	*ipCountries = nil
-	*ipCities = nil
-	currencies = nil
-	countries = nil
-	cities = nil
 }
 
 func main() {
