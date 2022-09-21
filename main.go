@@ -167,11 +167,9 @@ func getExRates(currency string) string {
 
 func getOrUpdateData() {
 	// TODO make async
-	ipCountries, co := provider.GetFromDB("Country")
-	ipCities, ci := provider.GetFromDB("City")
+	ipCountries, countries := provider.GetFromDB("Country")
+	ipCities, cities := provider.GetFromDB("City")
 	_, currencies := provider.GetFromDB("Currency")
-	countries := *co
-	cities := *ci
 
 	client.Del("ip_countries")
 	for i, ip := range *ipCountries {
@@ -200,7 +198,7 @@ func getOrUpdateData() {
 	}
 
 	client.Del("currency")
-	for k, v := range *currencies {
+	for k, v := range currencies {
 		client.HSet("currency", k, v)
 	}
 
@@ -209,7 +207,7 @@ func getOrUpdateData() {
 	//clearing
 	*ipCountries = nil
 	*ipCities = nil
-	*currencies = nil
+	currencies = nil
 	countries = nil
 	cities = nil
 }
@@ -231,7 +229,7 @@ func main() {
 	client.Set("visitors", 0, 0)
 
 	fmt.Println("Collecting data. Please wait..")
-	// getOrUpdateData()
+	getOrUpdateData()
 
 	c := cron.New()
 	c.AddFunc("@daily", getOrUpdateData)

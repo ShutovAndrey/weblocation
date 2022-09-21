@@ -244,7 +244,7 @@ func readCsvFileIP(filePath string) ([]IpAd, error) {
 
 }
 
-func GetFromDB(name string) (*[]IpAd, *map[string]string) {
+func GetFromDB(name string) (*[]IpAd, map[string]string) {
 	fileNames, err := downloadDB(name)
 	if err != nil {
 		logger.Error(err)
@@ -269,13 +269,13 @@ func GetFromDB(name string) (*[]IpAd, *map[string]string) {
 		if err != nil {
 			logger.Error(err)
 		}
-		return &ipAdresses, &locations
+		return &ipAdresses, locations
 	} else if name == "Currency" {
 		currencies, err := readCsvFile(fileNames["Currency"], 1, 3)
 		if err != nil {
 			logger.Error(err)
 		}
-		return nil, &currencies
+		return nil, currencies
 	} else {
 		return nil, nil
 	}
