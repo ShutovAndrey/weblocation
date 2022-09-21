@@ -64,7 +64,8 @@ func getDataByIP(ip string) map[string]any {
 
 	for _, n := range blackList {
 		if ipParsed == nil || ip == n {
-			ipParsed = net.ParseIP("5.149.159.38")
+			ipParsed = net.ParseIP("134.122.49.115")
+			// ipParsed = net.ParseIP("5.149.159.38")
 		}
 	}
 
@@ -113,9 +114,14 @@ func getDataByIP(ip string) map[string]any {
 }
 
 func getWeather(cityId string) Weather {
+	var w Weather
+
 	key, ok := os.LookupEnv("WEATHER_KEY")
 	if !ok {
-		key = "91096da3832d63747cd8c98c01c16e8f"
+		w.Main.Temp = 10.00
+		w.Main.FeelsLike = 11.00
+		w.Clouds.All = 40
+		return w
 	}
 
 	uri := fmt.Sprintf(
@@ -128,7 +134,6 @@ func getWeather(cityId string) Weather {
 
 	defer resp.Body.Close()
 
-	var w Weather
 	if err := json.NewDecoder(resp.Body).Decode(&w); err != nil {
 		logger.Error(err)
 	}
@@ -226,7 +231,7 @@ func main() {
 	client.Set("visitors", 0, 0)
 
 	fmt.Println("Collecting data. Please wait..")
-	getOrUpdateData()
+	// getOrUpdateData()
 
 	c := cron.New()
 	c.AddFunc("@daily", getOrUpdateData)
