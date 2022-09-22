@@ -66,7 +66,6 @@ func getDataByIP(ip string) map[string]any {
 	for _, n := range blackList {
 		if ipParsed == nil || ip == n {
 			ipParsed = net.ParseIP("134.122.49.115")
-			// ipParsed = net.ParseIP("5.149.159.38")
 		}
 	}
 
@@ -196,8 +195,6 @@ func getOrUpdateData() {
 			member := redis.Z{Score: float64(ip.Ip), Member: name}
 			client.ZAdd("ip_countries", member)
 		}
-		*ipCountries = nil
-		countries = nil
 	}()
 
 	go func() {
@@ -216,8 +213,6 @@ func getOrUpdateData() {
 			member := redis.Z{Score: float64(ip.Ip), Member: name}
 			client.ZAdd("ip_cities", member)
 		}
-		*ipCities = nil
-		cities = nil
 	}()
 
 	go func() {
@@ -227,7 +222,6 @@ func getOrUpdateData() {
 		for k, v := range currencies {
 			client.HSet("currency", k, v)
 		}
-		currencies = nil
 	}()
 	wg.Wait()
 	logger.Info("Redis databases updated")
