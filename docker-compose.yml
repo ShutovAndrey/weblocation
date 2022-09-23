@@ -14,8 +14,8 @@ services:
       - redis 
     command: ["go", "run", "main.go"]
     environment: 
-      MAXMIND_KEY: gBSl4eNfT5D5tL4r
-      WEATHER_KEY: 91096da3832d63747cd8c98c01c16e8f
+      MAXMIND_KEY: ${MAXMIND_KEY}
+      WEATHER_KEY: ${WEATHER_KEY}
       REDIS_URL: localhost:6379
     networks:
       - backend
