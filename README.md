@@ -6,5 +6,5 @@
 To run the application :
 
 ```bash
-go run main.go
+go run cmd/weblocation/main.go
 ```
