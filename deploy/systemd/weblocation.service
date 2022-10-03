@@ -1,0 +1,11 @@
+[Unit]
+Description=weblocation start
+After=local-fs.target network.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+WorkingDirectory=/home/www/weblocation/cmd/weblocation
+ExecStart=/home/www/weblocation/cmd/weblocation/weblocation
+Restart=always
