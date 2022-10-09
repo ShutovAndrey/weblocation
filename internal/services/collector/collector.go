@@ -62,7 +62,7 @@ func downloadDB(dbType string) (map[string]string, error) {
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, errors.Errorf("Received non 200 response code")
+		return nil, errors.New("Received non 200 response code")
 	}
 
 	defer resp.Body.Close()
@@ -174,7 +174,7 @@ func unzip(path, dst, dbType string) (map[string]string, error) {
 	return files, nil
 }
 
-func readCsvFile(filePath string, key, value uint8) (map[string]string, error) {
+func getRecords(filePath string) (*[][]string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
@@ -187,14 +187,22 @@ func readCsvFile(filePath string, key, value uint8) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return &records, nil
+}
 
-	dict := make(map[string]string, len(records))
+func readCsvFile(filePath string, key, value uint8) (map[string]string, error) {
+	records, err := getRecords(filePath)
+	if err != nil {
+		return nil, err
+	}
 
-	for i, record := range records {
+	dict := make(map[string]string, len(*records))
+
+	for i, record := range *records {
+		//skip csv headers
 		if i == 0 {
 			continue
 		}
-
 		length := uint8(len(record))
 		if key > length || value > length {
 			return nil, errors.New("Invalid key-value pair")
@@ -204,63 +212,57 @@ func readCsvFile(filePath string, key, value uint8) (map[string]string, error) {
 	if len(dict) != 0 {
 		return dict, nil
 	} else {
-		return nil, errors.New("Empty map")
+		return nil, errors.Errorf("Empty map: %s", filePath)
 	}
 
 }
 
-func readCsvFileIP(filePath string) ([]IpAd, error) {
-	file, err := os.Open(filePath)
+func readAndSetData(filePath, keyName string, locations map[string]string) error {
+	records, err := getRecords(filePath)
 	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-	reader.Comma = ','
-	records, err := reader.ReadAll()
-	if err != nil {
-		return nil, err
+		return err
 	}
 
-	ipAdresses := make([]IpAd, 0, len(records))
+	if len(*records) == 0 {
+		return errors.Errorf("No records: %s", filePath)
+	}
 
-	for i, record := range records {
+	for i, record := range *records {
+		//skip csv headers
 		if i == 0 {
 			continue
 		}
 		ip, _, err := net.ParseCIDR(record[0])
 		if err != nil {
-			return nil, err
+
 		}
 		ipEncoded := binary.BigEndian.Uint32(ip[12:16])
 		new := IpAd{Ip: ipEncoded, Code: record[1]}
-
-		ipAdresses = append(ipAdresses, new)
-
+		locationName, ok := locations[new.Code]
+		if !ok {
+			continue
+		}
+		if keyName == "City" {
+			database.HSet("cities", new.Code, locationName)
+		}
+		//unique names
+		name := fmt.Sprintf("%s_%d", new.Code, i)
+		member := redis.Z{Score: float64(new.Ip), Member: name}
+		//ip_city or ip_country
+		database.ZAdd(fmt.Sprintf("ip_%s", strings.ToLower(keyName)), member)
 	}
-	if len(ipAdresses) != 0 {
-		return ipAdresses, nil
-	} else {
-		return nil, errors.Errorf("Empty map")
-	}
-
+	return nil
 }
 
-func getFromDB(name string) (*[]IpAd, map[string]string) {
+//download databases and parse data
+func updateDB(name string) error {
 	fileNames, err := downloadDB(name)
 	if err != nil {
-		logger.Error(err)
+		return err
 	} else {
 		logger.Info(fmt.Sprintf("database %s successfully downloaded", name))
 	}
-
 	if isMaxMindDB(name) {
-		ipAdresses, err := readCsvFileIP(fileNames["Blocks-IPv4"])
-		if err != nil {
-			logger.Error(err)
-		}
-
 		var key, value uint8
 		if name == "City" {
 			key, value = 0, 10
@@ -270,19 +272,24 @@ func getFromDB(name string) (*[]IpAd, map[string]string) {
 
 		locations, err := readCsvFile(fileNames["Locations-en"], key, value)
 		if err != nil {
-			logger.Error(err)
+			return err
 		}
-		return &ipAdresses, locations
+
+		if err := readAndSetData(fileNames["Blocks-IPv4"], name, locations); err != nil {
+			return err
+		}
+		return nil
 	} else if name == "Currency" {
 		currencies, err := readCsvFile(fileNames["Currency"], 1, 3)
 		if err != nil {
-			logger.Error(err)
+			return err
 		}
-		return nil, currencies
-	} else {
-		return nil, nil
+		for k, v := range currencies {
+			database.HSet("currency", k, v)
+		}
+		return nil
 	}
-
+	return errors.New("Unknown DB")
 }
 
 //takes data and set it to redis
@@ -291,44 +298,29 @@ func GetOrUpdateData() {
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		ipCountries, countries := getFromDB("Country")
-		database.Del("ip_countries")
-		for i, ip := range *ipCountries {
-			code, ok := countries[ip.Code]
-			if !ok {
-				continue
-			}
-			//unique names
-			name := fmt.Sprintf("%s_%d", code, i)
-			member := redis.Z{Score: float64(ip.Ip), Member: name}
-			database.ZAdd("ip_countries", member)
+		//cleaning old data
+		database.Del("ip_country")
+		if err := updateDB("Country"); err != nil {
+			logger.Error(err)
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		ipCities, cities := getFromDB("City")
-		database.Del("ip_cities")
+		//cleaning old data
+		database.Del("ip_city")
 		database.Del("cities")
-		for i, ip := range *ipCities {
-			cityName, ok := cities[ip.Code]
-			if !ok {
-				continue
-			}
-			database.HSet("cities", ip.Code, cityName)
-			//unique names
-			name := fmt.Sprintf("%s_%d", ip.Code, i)
-			member := redis.Z{Score: float64(ip.Ip), Member: name}
-			database.ZAdd("ip_cities", member)
+		if err := updateDB("City"); err != nil {
+			logger.Error(err)
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		_, currencies := getFromDB("Currency")
+		//cleaning old data
 		database.Del("currency")
-		for k, v := range currencies {
-			database.HSet("currency", k, v)
+		if err := updateDB("Currency"); err != nil {
+			logger.Error(err)
 		}
 	}()
 	wg.Wait()

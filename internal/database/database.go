@@ -6,6 +6,7 @@ import (
 
 var client *redis.Client
 
+//set new redis client and check that it works
 func New() error {
 	client = redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",

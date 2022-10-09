@@ -59,7 +59,7 @@ func GetDataByIP(ip string) map[string]any {
 	go func() {
 		defer wg.Done()
 
-		countries, err := database.ZRevRangeByScore("ip_countries", op)
+		countries, err := database.ZRevRangeByScore("ip_country", op)
 		if err != nil {
 			countries = append(countries, "Russia")
 		}
@@ -74,7 +74,7 @@ func GetDataByIP(ip string) map[string]any {
 	go func() {
 		defer wg.Done()
 
-		cities, err := database.ZRevRangeByScore("ip_cities", op)
+		cities, err := database.ZRevRangeByScore("ip_city", op)
 		if err != nil {
 			cities = append(cities, "498817")
 		}
