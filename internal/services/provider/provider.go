@@ -115,7 +115,7 @@ func getWeather(cityId string) Weather {
 		cityId, key)
 	resp, _ := http.Get(uri)
 	if resp.StatusCode != 200 {
-		logger.Error(errors.New("Received non 200 response code"))
+		logger.Error(errors.New("Received non 200 response code from Openweather"))
 	}
 
 	defer resp.Body.Close()
@@ -138,7 +138,7 @@ func getExRates(currency string) string {
 		from, currency)
 	resp, _ := http.Get(uri)
 	if resp.StatusCode != 200 {
-		logger.Error(errors.New("Received non 200 response code"))
+		logger.Error(errors.New("Received non 200 response code from Coingate"))
 	}
 
 	defer resp.Body.Close()

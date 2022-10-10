@@ -45,8 +45,10 @@ func downloadDB(dbType string) (map[string]string, error) {
 		} else {
 			if dbType == "Country" {
 				uri = "https://gist.github.com/ShutovAndrey/16f98ad0cff549a782a31942e456f1ba/raw/8ca6715285b02b125772c45ae0b67babc21cad95/GeoLite2-Country-CSV.zip"
-			} else {
+			} else if dbType == "City" {
 				uri = "https://gist.github.com/ShutovAndrey/dada04a211a785856cd383c858410c8c/raw/78775d68b7ed276538bdc11811f1d15182a56169/GeoLite2-City-CSV.zip"
+			} else {
+				return nil, errors.New("Unknown DB")
 			}
 		}
 	} else if dbType == "Currency" {
@@ -109,7 +111,7 @@ func downloadDB(dbType string) (map[string]string, error) {
 
 	var files map[string]string
 	files = make(map[string]string)
-
+	//currencyDB is unzipped
 	if dbType != "Currency" {
 		var err error
 		files, err = unzip(path, tmpDir, dbType)
@@ -174,6 +176,7 @@ func unzip(path, dst, dbType string) (map[string]string, error) {
 	return files, nil
 }
 
+//get all records from csv file
 func getRecords(filePath string) (*[][]string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -186,6 +189,9 @@ func getRecords(filePath string) (*[][]string, error) {
 	records, err := reader.ReadAll()
 	if err != nil {
 		return nil, err
+	}
+	if len(records) == 0 {
+		return nil, errors.Errorf("No records: %s", filePath)
 	}
 	return &records, nil
 }
@@ -203,6 +209,7 @@ func readCsvFile(filePath string, key, value uint8) (map[string]string, error) {
 		if i == 0 {
 			continue
 		}
+		//simple overflow test
 		length := uint8(len(record))
 		if key > length || value > length {
 			return nil, errors.New("Invalid key-value pair")
@@ -214,17 +221,12 @@ func readCsvFile(filePath string, key, value uint8) (map[string]string, error) {
 	} else {
 		return nil, errors.Errorf("Empty map: %s", filePath)
 	}
-
 }
 
 func readAndSetData(filePath, keyName string, locations map[string]string) error {
 	records, err := getRecords(filePath)
 	if err != nil {
 		return err
-	}
-
-	if len(*records) == 0 {
-		return errors.Errorf("No records: %s", filePath)
 	}
 
 	for i, record := range *records {
